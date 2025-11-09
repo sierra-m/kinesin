@@ -10,15 +10,15 @@
 #define IR_SENSOR_COUNT 6
 #define IR_SENSOR_CHAN_START 5  // 5, 6, 7, 8, 9, 10
 
-#define CALIBRATE_SPEED 13
-#define CALIBRATE_DELAY_MSEC 2000
+#define CALIBRATE_SPEED 25
+#define CALIBRATE_DELAY_MSEC 1000
 
 // Number of sensors used can change, so normalize the calculated
 // position to a standard range. Ranges always start at 0.
 #define POS_RANGE_MAX ((IR_SENSOR_COUNT - 1) * 1000)
 #define NORM_RANGE_MAX 5000
 
-#define DEFAULT_DRIVE_SPEED 15
+#define DEFAULT_DRIVE_SPEED 25
 
 class LineDriver {
   public:

@@ -1,3 +1,4 @@
+#include "Arduino.h"
 #include "LineDriver.h"
 
 LineDriver::LineDriver (
@@ -15,15 +16,15 @@ LineDriver::LineDriver (
 
 void LineDriver::calibrate () {
   // Rotate CCW half a period
-  leftMotor->setSpeed(-CALIBRATE_SPEED);
+  leftMotor->setSpeed(-CALIBRATE_SPEED-5);
   rightMotor->setSpeed(CALIBRATE_SPEED);
   calibrateDelay(CALIBRATE_DELAY_MSEC / 2);
   // Rotate CW a full period
   leftMotor->setSpeed(CALIBRATE_SPEED);
-  rightMotor->setSpeed(-CALIBRATE_SPEED);
+  rightMotor->setSpeed(-CALIBRATE_SPEED-5);
   calibrateDelay(CALIBRATE_DELAY_MSEC);
   // Rotate CCW half a period, returning to center
-  leftMotor->setSpeed(-CALIBRATE_SPEED);
+  leftMotor->setSpeed(-CALIBRATE_SPEED-5);
   rightMotor->setSpeed(CALIBRATE_SPEED);
   calibrateDelay(CALIBRATE_DELAY_MSEC / 2);
   leftMotor->setSpeed(0);
@@ -37,12 +38,6 @@ void LineDriver::drive () {
     position = map(position, 0, POS_RANGE_MAX, 0, NORM_RANGE_MAX);
   }
   int correction = pidController->getCorrection(position);
-  // Trim correction at max speed boundaries
-  if (correction > speed) {
-    correction = speed;
-  } else if (correction < -speed) {
-    correction = -speed;
-  }
   // Negative -> Turn left
   // Positive -> Turn right
   int leftSpeed;
@@ -54,12 +49,10 @@ void LineDriver::drive () {
     leftSpeed = speed;
     rightSpeed = speed - correction;
   }
+  leftSpeed = constrain(leftSpeed, MOTOR_SPEED_MIN, MOTOR_SPEED_MAX);
+  rightSpeed = constrain(rightSpeed, MOTOR_SPEED_MIN, MOTOR_SPEED_MAX);
   leftMotor->setSpeed(leftSpeed);
   rightMotor->setSpeed(rightSpeed);
-  // Serial.print("Left: ");
-  // Serial.print(leftSpeed);
-  // Serial.print(", Right: ");
-  // Serial.println(rightSpeed);
 }
 
 void LineDriver::setSpeed (int speed) {
