@@ -1,11 +1,10 @@
-#include "esp32-hal.h"
-#include "esp32-hal-gpio.h"
 #ifndef ULTRASONIC_SENSOR_H
 #define ULTRASONIC_SENSOR_H
 
+#include "esp32-hal.h"
+#include "esp32-hal-gpio.h"
 #include <stdint.h>
 #include "Arduino.h"
-//#include "FunctionalInterrupt.h"
 
 // Timeout in microseconds
 #define ULTRASONIC_TIMEOUT_MICROS 25000
