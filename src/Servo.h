@@ -16,6 +16,10 @@
 // Min delay is calculated from fullMoveDelay
 #define SERVO_MAX_DELAY_MULT 5
 
+// Convenience macros
+#define BLOCKING 1
+#define NONBLOCKING 0
+
 class Servo {
   public:
     // GPIO pin to bind to
