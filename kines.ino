@@ -13,9 +13,9 @@
 #include "src/AnalogMultiplexer.h"
 #include "src/PIDController.h"
 #include "src/LineDriver.h"
-#include "src/MicroServoSG90.h"
+#include "src/HS311Servo.h"
 #include "src/Motor.h"
-#include "src/UltrasonicSensor.h"
+#include "src/SharpIrSensor.h"
 
 // For secrets like:
 //   STASSID
@@ -37,21 +37,21 @@
 #define MQTT_NAME_MAX_SIZE 20
 #define MQTT_ID_MAX_SIZE (MQTT_NAME_MAX_SIZE + 5)
 
-#define CONTROL_P_VAL (1.0f / 65.0f)
+#define CONTROL_P_VAL (1.0f / 30.0f)
 #define CONTROL_I_VAL 0
 #define CONTROL_D_VAL 0
 
 #define PID_TARGET_VAL (POS_RANGE_MAX / 2)
 
 #define MOTOR_LEFT_INV 0
-#define MOTOR_RIGHT_INV 1
+#define MOTOR_RIGHT_INV 0
 
-// Ultrasonid sensor polling period in millis
-#define US_SENSOR_POLL_PER_MSEC 60
+// Distance threshold at which a blockage is detected
+#define BLOCKAGE_DETECT_THRESH_CM 20
 
 // Pins
 // =============================================
-#define IR_ADC_PIN 32    // ADC1_4 (GPIO_32)
+#define LINE_IR_ADC_PIN 32    // ADC1_4 (GPIO_32)
 #define MPLEX_S0_PIN 27  // GPIO_27
 #define MPLEX_S1_PIN 26  // GPIO_26
 #define MPLEX_S2_PIN 25  // GPIO_25
@@ -60,15 +60,12 @@
 #define MOTOR_LEFT_PIN 22   // GPIO_22
 #define MOTOR_RIGHT_PIN 23  // GPIO_23
 
-#define ARM_SERVO_LEFT_PIN 5
-#define ARM_SERVO_RIGHT_PIN 18
+#define FOOT_SERVO_LEFT_PIN 5
+#define FOOT_SERVO_RIGHT_PIN 18
 #define TIPPING_SERVO_PIN 19
 
-#define LEFT_US_SENSOR_PIN 16
-#define RIGHT_US_SENSOR_PIN 17
-
-#define TEMP_TRIG_PIN RIGHT_US_SENSOR_PIN
-#define TEMP_ECHO_PIN LEFT_US_SENSOR_PIN
+#define LEFT_IR_SENSOR_PIN 35  // ADC1_7
+#define RIGHT_IR_SENSOR_PIN 34  // ADC1_6
 
 
 // Types
@@ -79,13 +76,6 @@ struct SavedClientName {
   char magicChar;
   char name[MQTT_NAME_MAX_SIZE];
   uint8_t xorVal;
-};
-
-// State to poll ultrasonic sensors
-enum UsSensorPollState {
-  UsPollStateTrig,
-  UsPollStateEcho,
-  UsPollStateWait
 };
 
 // State for robot driving
@@ -131,7 +121,7 @@ uint8_t requiresClientNameSave = false;
 WiFiClient wifiClient;
 PubSubClient mqttClient(wifiClient);
 
-AnalogMultiplexer analogMplex(MPLEX_S0_PIN, MPLEX_S1_PIN, MPLEX_S2_PIN, MPLEX_S3_PIN, IR_ADC_PIN);
+AnalogMultiplexer analogMplex(MPLEX_S0_PIN, MPLEX_S1_PIN, MPLEX_S2_PIN, MPLEX_S3_PIN, LINE_IR_ADC_PIN);
 PIDController pidController(PID_TARGET_VAL, CONTROL_P_VAL, CONTROL_I_VAL, CONTROL_D_VAL);
 
 Motor leftMotor(MOTOR_LEFT_PIN, MOTOR_LEFT_INV);
@@ -139,23 +129,12 @@ Motor rightMotor(MOTOR_RIGHT_PIN, MOTOR_RIGHT_INV);
 
 LineDriver lineDriver(&analogMplex, &pidController, &leftMotor, &rightMotor);
 
-MicroServoSG90 leftArmServo(ARM_SERVO_LEFT_PIN);
-MicroServoSG90 rightArmServo(ARM_SERVO_RIGHT_PIN);
-MicroServoSG90 tippingServo(TIPPING_SERVO_PIN);
+HS311Servo leftFootServo(FOOT_SERVO_LEFT_PIN);
+HS311Servo rightFootServo(FOOT_SERVO_RIGHT_PIN);
+HS311Servo tippingServo(TIPPING_SERVO_PIN);
 
-UltrasonicSensor leftUsSensor(TEMP_TRIG_PIN, TEMP_ECHO_PIN);
-//UltrasonicSensor rightUsSensor(RIGHT_US_SENSOR_PIN);
-
-void ARDUINO_ISR_ATTR leftUsSensorISR () {
-  leftUsSensor.sensorISR();
-}
-
-// The ultrasonic sensors cannot be polled simultaneously, and so
-// polling must alternate between them. Addtionally, polling must
-// wait a minimum period after successful measurement or timeout
-// to ensure no signal overlap.
-uint8_t pollLeftUsSensor = true;
-UsSensorPollState ultrasonicPollState = UsPollStateTrig;
+SharpIrSensor leftIrSensor(LEFT_IR_SENSOR_PIN);
+SharpIrSensor rightIrSensor(RIGHT_IR_SENSOR_PIN);
 
 float leftDistanceCm;
 float rightDistanceCm;
@@ -164,6 +143,39 @@ float rightDistanceCm;
 unsigned long lastUsSensorTrigMs;
 
 RobotDriveState driveState = DriveStateIdle;
+
+void spinny () {
+  uint8_t left = random(2);
+  int startIrVal = analogMplex.sample(8);
+  if (left) {
+    leftMotor.setSpeed(-25);
+    rightMotor.setSpeed(20);
+  } else {
+    leftMotor.setSpeed(20);
+    rightMotor.setSpeed(-25);
+  }
+  delay(500);
+  // 180 degress
+  while(abs(analogMplex.sample(8) - startIrVal) > 300) {}
+  delay(500);
+  // 360 degrees
+  while(abs(analogMplex.sample(8) - startIrVal) > 300) {}
+  leftMotor.setSpeed(0);
+  rightMotor.setSpeed(0);
+}
+
+void tipOver () {
+  leftMotor.setSpeed(30);
+  rightMotor.setSpeed(30);
+  delay(1000);
+  // Pull blocking, ensuring full movement
+  tippingServo.setPos(1000, BLOCKING);
+  // Reset nonblocking, as timing not critical
+  tippingServo.setPos(0, NONBLOCKING);
+  delay(100);
+  leftMotor.setSpeed(0);
+  rightMotor.setSpeed(0);
+}
 
 void handleMoodCommand (std::string cmd) {
   if (cmd == "happy") {
@@ -178,10 +190,14 @@ void handleActionCommand (std::string cmd) {
     Serial.println("Dropping!");
   } else if (cmd == "spin") {
     Serial.println("Do a spin!");
+    spinny();
   } else if (cmd == "die") {
     Serial.println("Dying (x_x)");
+    tipOver();
   } else if (cmd == "reset") {
     Serial.println("Reset!");
+    leftMotor.setSpeed(0);
+    rightMotor.setSpeed(0);
   } else if (cmd == "march") {
     Serial.println("Marching!	ᕕ( ᐛ )ᕗ");
     driveState = DriveStateDriving;
@@ -195,22 +211,9 @@ void handleActionCommand (std::string cmd) {
   } else if (cmd == "step") {
     leftMotor.setSpeed(15);
     rightMotor.setSpeed(15);
-    delay(3000);
+    delay(2000);
     leftMotor.setSpeed(0);
     rightMotor.setSpeed(0);
-  } else if (cmd == "ping") {
-    pinMode(TEMP_TRIG_PIN, OUTPUT);
-    digitalWrite(TEMP_TRIG_PIN, LOW);
-    delayMicroseconds(2);
-    digitalWrite(TEMP_TRIG_PIN, HIGH);
-    delayMicroseconds(10);
-    digitalWrite(TEMP_TRIG_PIN, LOW);
-    delayMicroseconds(5);
-
-    pinMode(TEMP_ECHO_PIN, INPUT);
-    unsigned long duration = pulseIn(TEMP_ECHO_PIN, HIGH);
-    float distanceCm = duration * 0.0343 / 2;
-    Serial.printf("Distance: %.2f cm\n", distanceCm);
   }
 }
 
@@ -290,6 +293,12 @@ void handleMotorsCommand (std::string cmd) {
   }
 }
 
+void blinkLED () {
+  digitalWrite(LED_BUILTIN, HIGH);
+  delay(100);
+  digitalWrite(LED_BUILTIN, LOW);
+}
+
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
   char debugStr[100];
   std::string topicStr(topic);
@@ -312,6 +321,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   } else if (topicStr == mqttTopicGenMotors) {
     handleMotorsCommand(msgStr);
   }
+  blinkLED();
 }
 
 void initMqttTopicNames () {
@@ -351,9 +361,13 @@ void mqttConnect () {
       Serial.print("failed, rc=");
       Serial.print(mqttClient.state());
       Serial.println(", trying again in 5 seconds");   // Wait 5 seconds before retrying
-      delay(5000);
+      delay(2500);
+      digitalWrite(LED_BUILTIN, LOW);
+      delay(2500);
+      digitalWrite(LED_BUILTIN, HIGH);
     }
   }
+  digitalWrite(LED_BUILTIN, LOW);
 }
 
 uint8_t computeXor(char *name) {
@@ -392,51 +406,12 @@ void saveClientName () {
   EEPROM.commit();
 }
 
-void handleUltrasonicSensors () {
-  //UltrasonicSensor *targetUsSensor = (pollLeftUsSensor ? &leftUsSensor : &rightUsSensor);
-  UltrasonicSensor *targetUsSensor = &leftUsSensor;  // TODO: use both again
-  switch (ultrasonicPollState) {
-    // Trigger State: trigger and jump to echo
-    case UsPollStateTrig:
-      targetUsSensor->trigger();
-      lastUsSensorTrigMs = millis();  // store trigger time for wait period
-      ultrasonicPollState = UsPollStateEcho;
-      break;
-    // Echo State: wait for update or timeout
-    case UsPollStateEcho:
-      if (targetUsSensor->hasUpdate()) {
-        // If update available, store distance and jump to wait
-        float distanceCm = targetUsSensor->getDistanceCm();
-        if (pollLeftUsSensor) {
-          leftDistanceCm = distanceCm;
-        } else {
-          rightDistanceCm = distanceCm;
-        }
-        ultrasonicPollState = UsPollStateWait;
-      } else if (targetUsSensor->checkTimedOut()) {
-        // If sensor timed out, jump to wait
-        ultrasonicPollState = UsPollStateWait;
-        // Serial.print("Timeout for ");
-        // Serial.println(pollLeftUsSensor ? "left" : "right");
-      }
-      break;
-    // Wait State: wait for polling period to end
-    case UsPollStateWait:
-      if ((millis() - lastUsSensorTrigMs) > US_SENSOR_POLL_PER_MSEC) {
-        // Switch to other sensor and jump to trigger
-        //pollLeftUsSensor = !pollLeftUsSensor;  // TODO: re-enable
-        ultrasonicPollState = UsPollStateTrig;
-      }
-      break;
-    default:
-      Serial.print("Invalid ultrasonic poll state: ");
-      Serial.println(int(ultrasonicPollState));
-      while (true) {} // hang forever (triggering watchdog error)
-  }
-}
-
 void checkObjectDetected () {
-  if (leftDistanceCm > 0 && leftDistanceCm < 30) {
+  float leftDistanceCm = leftIrSensor.getDistanceCm();
+  float rightDistanceCm = rightIrSensor.getDistanceCm();
+  uint8_t leftBlocked = (leftDistanceCm > 0 && leftDistanceCm < BLOCKAGE_DETECT_THRESH_CM);
+  uint8_t rightBlocked = (rightDistanceCm > 0 && rightDistanceCm < BLOCKAGE_DETECT_THRESH_CM);
+  if (leftBlocked || rightBlocked) {
     if (driveState == DriveStateDriving) {
       driveState = DriveStateWaiting;
       lineDriver.stop();
@@ -459,10 +434,15 @@ void setup() {
   WiFi.mode(WIFI_STA);
   WiFi.begin(wifiSSID, wifiPassword);
   // Wait for connection
+  uint8_t ledState = 0;
+  pinMode(LED_BUILTIN, OUTPUT);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
+    digitalWrite(LED_BUILTIN, ledState);
+    ledState = !ledState;
   }
+  digitalWrite(LED_BUILTIN, HIGH);
   Serial.println();
   Serial.print("Connected to ");
   Serial.println(wifiSSID);
@@ -479,9 +459,7 @@ void setup() {
   }
   initMqttTopicNames();
   
-  leftArmServo.setPos(500, 0);
-
-  UltrasonicSensor::registerISR(&leftUsSensor, &leftUsSensorISR);
+  tippingServo.setPos(0, NONBLOCKING);
 }
 
 void loop() {
@@ -497,8 +475,8 @@ void loop() {
   if (driveState == DriveStateDriving) {
     lineDriver.drive();
   }
-  handleUltrasonicSensors();
   checkObjectDetected();
+  leftMotor.handleDisengage();
+  rightMotor.handleDisengage();
   //leftArmServo.update();
-  delay(10); // TODO: Remove or shorten
 }
