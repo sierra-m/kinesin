@@ -38,7 +38,7 @@
 #define MQTT_ID_MAX_SIZE (MQTT_NAME_MAX_SIZE + 5)
 
 #define CONTROL_P_VAL (1.0f / 30.0f)
-#define CONTROL_I_VAL 0
+#define CONTROL_I_VAL (1.0f / 1000.0f)
 #define CONTROL_D_VAL 0
 
 #define PID_TARGET_VAL (POS_RANGE_MAX / 2)
