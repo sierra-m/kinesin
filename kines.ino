@@ -16,6 +16,7 @@
 #include "src/HS311Servo.h"
 #include "src/Motor.h"
 #include "src/SharpIrSensor.h"
+#include "src/Feet.h"
 
 // For secrets like:
 //   STASSID
@@ -133,6 +134,8 @@ HS311Servo leftFootServo(FOOT_SERVO_LEFT_PIN);
 HS311Servo rightFootServo(FOOT_SERVO_RIGHT_PIN);
 HS311Servo tippingServo(TIPPING_SERVO_PIN);
 
+Feet feet(&leftFootServo, &rightFootServo);
+
 SharpIrSensor leftIrSensor(LEFT_IR_SENSOR_PIN);
 SharpIrSensor rightIrSensor(RIGHT_IR_SENSOR_PIN);
 
@@ -201,10 +204,12 @@ void handleActionCommand (std::string cmd) {
   } else if (cmd == "march") {
     Serial.println("Marching!	ᕕ( ᐛ )ᕗ");
     driveState = DriveStateDriving;
+    feet.startWalking();
   } else if (cmd == "halt") {
     Serial.println("Halt!!!");
     driveState = DriveStateIdle;
     lineDriver.stop();
+    feet.stopWalking();
   } else if (cmd == "calib") {
     Serial.println("Calibrating...");
     lineDriver.calibrate();
@@ -460,6 +465,7 @@ void setup() {
   initMqttTopicNames();
   
   tippingServo.setPos(0, NONBLOCKING);
+  feet.init();
 }
 
 void loop() {
@@ -478,5 +484,7 @@ void loop() {
   checkObjectDetected();
   leftMotor.handleDisengage();
   rightMotor.handleDisengage();
-  //leftArmServo.update();
+  leftFootServo.update();
+  rightFootServo.update();
+  feet.update();
 }
