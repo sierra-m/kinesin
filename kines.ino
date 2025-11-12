@@ -167,17 +167,25 @@ void spinny () {
   rightMotor.setSpeed(0);
 }
 
+void reset () {
+  driveState = DriveStateIdle;
+  leftMotor.setSpeed(0);
+  rightMotor.setSpeed(0);
+  feet.stopWalking();
+  tippingServo.setPos(0);
+}
+
 void tipOver () {
-  leftMotor.setSpeed(30);
-  rightMotor.setSpeed(30);
-  delay(1000);
   // Pull blocking, ensuring full movement
   tippingServo.setPos(1000, BLOCKING);
   // Reset nonblocking, as timing not critical
   tippingServo.setPos(0, NONBLOCKING);
-  delay(100);
-  leftMotor.setSpeed(0);
-  rightMotor.setSpeed(0);
+}
+
+void halt () {
+  driveState = DriveStateIdle;
+  lineDriver.stop();
+  feet.stopWalking();
 }
 
 void handleMoodCommand (std::string cmd) {
@@ -197,26 +205,24 @@ void handleActionCommand (std::string cmd) {
   } else if (cmd == "die") {
     Serial.println("Dying (x_x)");
     tipOver();
+    halt();
   } else if (cmd == "reset") {
     Serial.println("Reset!");
-    leftMotor.setSpeed(0);
-    rightMotor.setSpeed(0);
+    reset();
   } else if (cmd == "march") {
     Serial.println("Marching!	ᕕ( ᐛ )ᕗ");
     driveState = DriveStateDriving;
     feet.startWalking();
   } else if (cmd == "halt") {
     Serial.println("Halt!!!");
-    driveState = DriveStateIdle;
-    lineDriver.stop();
-    feet.stopWalking();
+    halt();
   } else if (cmd == "calib") {
     Serial.println("Calibrating...");
     lineDriver.calibrate();
   } else if (cmd == "step") {
     leftMotor.setSpeed(15);
     rightMotor.setSpeed(15);
-    delay(2000);
+    delay(1000);
     leftMotor.setSpeed(0);
     rightMotor.setSpeed(0);
   }
@@ -464,8 +470,7 @@ void setup() {
   }
   initMqttTopicNames();
   
-  tippingServo.setPos(0, NONBLOCKING);
-  feet.init();
+  reset();
 }
 
 void loop() {

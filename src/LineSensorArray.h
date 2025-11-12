@@ -18,7 +18,8 @@ struct IrChannelLimits {
 template <int Size>
 class LineSensorArray {
   public:
-    LineSensorArray();
+    uint8_t trackBlack;
+    LineSensorArray(uint8_t trackBlack = 1);
     int calcPosition(int *samples);
 
     IrChannelLimits channelLimits[Size];
@@ -29,7 +30,8 @@ class LineSensorArray {
 // Implementations
 
 template <int Size>
-LineSensorArray<Size>::LineSensorArray() {
+LineSensorArray<Size>::LineSensorArray(uint8_t trackBlack) {
+  this->trackBlack = trackBlack;
   for (int i = 0; i < Size; i++) {
     channelLimits[i].minValue = CHANNEL_MIN_INIT;
     channelLimits[i].maxValue = CHANNEL_MAX_INIT;
@@ -47,6 +49,10 @@ int LineSensorArray<Size>::calcPosition(int *samples) {
       channelLimits[i].maxValue = samples[i];
     }
     normalized[i] = normalize(i, samples[i]);
+    // If tracking white, invert normalized value
+    if (!trackBlack) {
+      normalized[i] = 1000 - normalized[i];
+    }
   }
   return calcWeightedAvg(normalized);
 }
