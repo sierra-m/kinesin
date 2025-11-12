@@ -7,6 +7,8 @@ Feet::Feet (HS311Servo *leftFoot, HS311Servo *rightFoot) {
 }
 
 void Feet::init () {
+  leftFoot->setSpeed(FEET_WALK_SPEED);
+  rightFoot->setSpeed(FEET_WALK_SPEED);
   leftFoot->setPos(0);
   rightFoot->setPos(0);
 }
@@ -25,6 +27,7 @@ void Feet::stopWalking() {
 
 void Feet::update () {
   if (walking) {
+    // Invert when they both stop moving
     if (! (leftFoot->requiresUpdate() || rightFoot->requiresUpdate()) ) {
       leftFootUp = !leftFootUp;
       if (leftFootUp) {

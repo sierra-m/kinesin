@@ -3,6 +3,8 @@
 
 #include "HS311Servo.h"
 
+#define FEET_WALK_SPEED 50
+
 class Feet {
   public:
     HS311Servo *leftFoot;
