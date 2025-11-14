@@ -18,7 +18,6 @@
 #include "src/Motor.h"
 #include "src/SharpIrSensor.h"
 #include "src/Feet.h"
-#include "src/LoopTimer.h"
 
 // For secrets like:
 //   STASSID
@@ -52,7 +51,6 @@
 // Distance threshold at which a blockage is detected
 #define BLOCKAGE_DETECT_THRESH_CM 20
 
-//#define CLK_PIN   4
 #define LED_TYPE WS2812B
 #define LED_COLOR_ORDER GRB
 #define LED_COUNT 20
@@ -161,6 +159,9 @@ RobotDriveState driveState = DriveStateIdle;
 CRGB leds[LED_COUNT];
 
 CRGB happyColor;
+
+unsigned long lastLoopMicros;
+unsigned long loopMicros;
 
 void pickHappyColor() {
   int choice = random(0, 6);
@@ -285,6 +286,9 @@ void handleActionCommand (std::string cmd) {
     delay(1000);
     leftMotor.setSpeed(0);
     rightMotor.setSpeed(0);
+  } else if (cmd == "looptime") {
+    Serial.print("loop time micros: ");
+    Serial.println(loopMicros);
   }
 }
 
@@ -546,7 +550,8 @@ void setup() {
 }
 
 void loop() {
-  loopTimer.update();
+  loopMicros = micros() - lastLoopMicros;
+  lastLoopMicros = micros();
   if (!mqttClient.connected()) {
     mqttConnect();
   }

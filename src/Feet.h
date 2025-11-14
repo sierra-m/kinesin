@@ -3,12 +3,10 @@
 
 #include "MG90SServo.h"
 
-#define FEET_WALK_SPEED 90
+#define FEET_WALK_SPEED 50
 
 #define FOOT_UP 1
 #define FOOT_DOWN 0
-
-#define FEET_WALK_SPEED 50
 
 class Feet {
   public:
