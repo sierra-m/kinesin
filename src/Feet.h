@@ -8,6 +8,8 @@
 #define FOOT_UP 1
 #define FOOT_DOWN 0
 
+#define FEET_WALK_SPEED 50
+
 class Feet {
   public:
     MG90SServo *leftFoot;

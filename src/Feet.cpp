@@ -44,6 +44,7 @@ void Feet::stopWalking() {
 
 void Feet::update () {
   if (walking) {
+    // Invert when they both stop moving
     if (! (leftFoot->requiresUpdate() || rightFoot->requiresUpdate()) ) {
       leftFootUp = !leftFootUp;
       if (leftFootUp) {

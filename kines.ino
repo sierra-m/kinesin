@@ -1,7 +1,7 @@
+#include <FastLED.h>
 #include <WiFi.h>
 #include <WiFiClient.h>
 #include <WiFiGeneric.h>
-#include <WiFiServer.h>
 #include <WiFiType.h>
 
 #include <string>
@@ -52,6 +52,12 @@
 // Distance threshold at which a blockage is detected
 #define BLOCKAGE_DETECT_THRESH_CM 20
 
+//#define CLK_PIN   4
+#define LED_TYPE WS2812B
+#define LED_COLOR_ORDER GRB
+#define LED_COUNT 20
+#define LED_BRIGHTNESS 50
+
 // Pins
 // =============================================
 #define LINE_IR_ADC_PIN 32    // ADC1_4 (GPIO_32)
@@ -69,6 +75,9 @@
 
 #define LEFT_IR_SENSOR_PIN 35  // ADC1_7
 #define RIGHT_IR_SENSOR_PIN 34  // ADC1_6
+
+#define LED_DATA_PIN 21
+#define RANDOM_SEED_PIN 36  // ADC1_0, floating
 
 
 // Types
@@ -149,7 +158,50 @@ unsigned long lastUsSensorTrigMs;
 
 RobotDriveState driveState = DriveStateIdle;
 
-LoopTimer loopTimer;
+CRGB leds[LED_COUNT];
+
+CRGB happyColor;
+
+void pickHappyColor() {
+  int choice = random(0, 6);
+  switch (choice) {
+    case 0:
+      happyColor = CRGB::Blue;
+      break;
+    case 1:
+      happyColor = CRGB::Purple;
+      break;
+    case 2:
+      happyColor = CRGB::Orange;
+      break;
+    case 3:
+      happyColor = CRGB::Cyan;
+      break;
+    case 4:
+      happyColor = CRGB::Pink;
+      break;
+    case 5:
+      happyColor = CRGB::Green;
+      break;
+    default:
+      happyColor = CRGB::Purple;
+  }
+}
+
+void setHappy () {
+  fill_solid(leds, LED_COUNT, happyColor);
+  FastLED.show();
+}
+
+void setAngry () {
+  fill_solid(leds, LED_COUNT, CRGB::Red);
+  FastLED.show();
+}
+
+void setDead () {
+  FastLED.clear();
+  FastLED.show();
+}
 
 void spinny () {
   uint8_t left = random(2);
@@ -171,24 +223,35 @@ void spinny () {
   rightMotor.setSpeed(0);
 }
 
+void reset () {
+  driveState = DriveStateIdle;
+  leftMotor.setSpeed(0);
+  rightMotor.setSpeed(0);
+  feet.stopWalking();
+  tippingServo.setPos(0);
+  setHappy();
+}
+
 void tipOver () {
-  leftMotor.setSpeed(30);
-  rightMotor.setSpeed(30);
-  delay(1000);
   // Pull blocking, ensuring full movement
   tippingServo.setPos(1000, BLOCKING);
   // Reset nonblocking, as timing not critical
   tippingServo.setPos(0, NONBLOCKING);
-  delay(100);
-  leftMotor.setSpeed(0);
-  rightMotor.setSpeed(0);
+}
+
+void halt () {
+  driveState = DriveStateIdle;
+  lineDriver.stop();
+  feet.stopWalking();
 }
 
 void handleMoodCommand (std::string cmd) {
   if (cmd == "happy") {
     Serial.println("Happy!! (=^-^=)");
+    setHappy();
   } else if (cmd == "angry") {
     Serial.println("Angry!!! (｡ •̀ ᴖ •́ ｡)");
+    setAngry();
   }
 }
 
@@ -201,26 +264,25 @@ void handleActionCommand (std::string cmd) {
   } else if (cmd == "die") {
     Serial.println("Dying (x_x)");
     tipOver();
+    halt();
+    setDead();
   } else if (cmd == "reset") {
     Serial.println("Reset!");
-    leftMotor.setSpeed(0);
-    rightMotor.setSpeed(0);
+    reset();
   } else if (cmd == "march") {
     Serial.println("Marching!	ᕕ( ᐛ )ᕗ");
     driveState = DriveStateDriving;
     feet.startWalking();
   } else if (cmd == "halt") {
     Serial.println("Halt!!!");
-    driveState = DriveStateIdle;
-    lineDriver.stop();
-    feet.stopWalking();
+    halt();
   } else if (cmd == "calib") {
     Serial.println("Calibrating...");
     lineDriver.calibrate();
   } else if (cmd == "step") {
     leftMotor.setSpeed(15);
     rightMotor.setSpeed(15);
-    delay(2000);
+    delay(1000);
     leftMotor.setSpeed(0);
     rightMotor.setSpeed(0);
   }
@@ -437,6 +499,8 @@ void checkObjectDetected () {
 void setup() {
   EEPROM.begin(EEPROM_SIZE);
 
+  randomSeed(analogRead(RANDOM_SEED_PIN));
+
   Serial.begin(115200);
   Serial.println("Alive");
 
@@ -469,9 +533,16 @@ void setup() {
     strncpy(mqttClientName, String(random(0xffff), HEX).c_str(), MQTT_NAME_MAX_SIZE);
   }
   initMqttTopicNames();
+
+  FastLED.addLeds<LED_TYPE, LED_DATA_PIN, LED_COLOR_ORDER>(leds, LED_COUNT)
+    .setCorrection(TypicalLEDStrip)
+    .setDither(1);
   
-  tippingServo.setPos(0, NONBLOCKING);
-  feet.init();
+  FastLED.setBrightness(LED_BRIGHTNESS);
+
+  pickHappyColor();
+  
+  reset();
 }
 
 void loop() {
