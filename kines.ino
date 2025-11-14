@@ -14,9 +14,11 @@
 #include "src/PIDController.h"
 #include "src/LineDriver.h"
 #include "src/HS311Servo.h"
+#include "src/MG90SServo.h"
 #include "src/Motor.h"
 #include "src/SharpIrSensor.h"
 #include "src/Feet.h"
+#include "src/LoopTimer.h"
 
 // For secrets like:
 //   STASSID
@@ -130,8 +132,8 @@ Motor rightMotor(MOTOR_RIGHT_PIN, MOTOR_RIGHT_INV);
 
 LineDriver lineDriver(&analogMplex, &pidController, &leftMotor, &rightMotor);
 
-HS311Servo leftFootServo(FOOT_SERVO_LEFT_PIN);
-HS311Servo rightFootServo(FOOT_SERVO_RIGHT_PIN);
+MG90SServo leftFootServo(FOOT_SERVO_LEFT_PIN);
+MG90SServo rightFootServo(FOOT_SERVO_RIGHT_PIN);
 HS311Servo tippingServo(TIPPING_SERVO_PIN);
 
 Feet feet(&leftFootServo, &rightFootServo);
@@ -146,6 +148,8 @@ float rightDistanceCm;
 unsigned long lastUsSensorTrigMs;
 
 RobotDriveState driveState = DriveStateIdle;
+
+LoopTimer loopTimer;
 
 void spinny () {
   uint8_t left = random(2);
@@ -420,10 +424,12 @@ void checkObjectDetected () {
     if (driveState == DriveStateDriving) {
       driveState = DriveStateWaiting;
       lineDriver.stop();
+      feet.stopWalking();
     }
   } else {
     if (driveState == DriveStateWaiting) {
       driveState = DriveStateDriving;
+      feet.startWalking();
     }
   }
 }
@@ -469,6 +475,7 @@ void setup() {
 }
 
 void loop() {
+  loopTimer.update();
   if (!mqttClient.connected()) {
     mqttConnect();
   }

@@ -16,6 +16,12 @@
 // Min delay is calculated from fullMoveDelay
 #define SERVO_MAX_DELAY_MULT 5
 
+#define SERVO_UPDATE_DELAY_MIN 1000
+// Number of update cycles between each position update
+#define SERVO_UPDATE_CYCLE_BLOCK 5
+// Actual delay between position updates
+#define SERVO_UPDATE_DELAY (SERVO_UPDATE_DELAY_MIN * 5)
+
 // Convenience macros
 #define BLOCKING 1
 #define NONBLOCKING 0
@@ -68,6 +74,10 @@ class Servo {
     uint8_t speed;
     // Tracks single increment delay (aka 1/speed)
     int incrementDelay;
+    // Tracks next update delay
+    int updateDelay;
+    // Number of steps each update
+    int updateSteps;
 
     // Tracks next desired pulse width for async moves
     int nextPos;

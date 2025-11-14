@@ -27,7 +27,8 @@ Servo::Servo (uint16_t minPulseWidth, uint16_t maxPulseWidth, int fullMoveDelay,
 }
 
 void Servo::setPulseWidth (int width) {
-  int dutyFrac = map(width, 1000, 2000, SERVO_PWM_RANGE_MIN, SERVO_PWM_RANGE_MAX);
+  // Convert pulse width (micros) to duty value for hardware timer
+  int dutyFrac = (width * SERVO_PWM_RES_MAX) / 20'000; 
   ledcWrite(pin, dutyFrac);
 }
 
@@ -92,6 +93,13 @@ int Servo::getPos () {
 void Servo::setSpeed (uint8_t newSpeed) {
   speed = newSpeed;
   incrementDelay = map(newSpeed, 0, 100, maxIncrDelayMicros, minIncrDelayMicros);
+  if (incrementDelay < SERVO_UPDATE_DELAY) {
+    updateDelay = SERVO_UPDATE_DELAY;
+    updateSteps = SERVO_UPDATE_DELAY / incrementDelay;
+  } else {
+    updateDelay = incrementDelay;
+    updateSteps = 1;
+  }
 }
 
 uint8_t Servo::getSpeed () {
@@ -103,14 +111,21 @@ uint8_t Servo::requiresUpdate () {
 }
 
 void Servo::update () {
-  // If current position needs to move, check time asynchronously and move one
-  // 1/1000th in that direction if the delay is sufficient
+  // If current position needs to move, check time asynchronously and move 
+  // `updateSteps` in that direction if the delay is sufficient
   if (currentPos != nextPos) {
-    if ((micros() - lastTimeMicros) > incrementDelay) {
+    if ((micros() - lastTimeMicros) > updateDelay) {
+      int steps = updateSteps;
+      if (steps > 1) {
+        int diff = abs(currentPos - nextPos);
+        if (diff < updateSteps) {
+          steps = diff;
+        }
+      }
       if (currentPos > nextPos) {
-        currentPos--;
+        currentPos -= steps;
       } else {
-        currentPos++;
+        currentPos += steps;
       }
       int pulseWidth = map(currentPos, 0, 1000, startPulseWidth, endPulseWidth);
       setPulseWidth(pulseWidth);

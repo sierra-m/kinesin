@@ -1,26 +1,45 @@
 #include "Feet.h"
 
 
-Feet::Feet (HS311Servo *leftFoot, HS311Servo *rightFoot) {
+Feet::Feet (MG90SServo *leftFoot, MG90SServo *rightFoot) {
   this->leftFoot = leftFoot;
   this->rightFoot = rightFoot;
 }
 
 void Feet::init () {
+  leftFoot->setSpeed(FEET_WALK_SPEED);
+  rightFoot->setSpeed(FEET_WALK_SPEED);
   leftFoot->setPos(0);
   rightFoot->setPos(0);
+}
+
+void Feet::setLeft(uint8_t up) {
+  if (up) {
+    leftFoot->setPos(1000);
+  } else {
+    leftFoot->setPos(500);
+  }
+}
+
+void Feet::setRight(uint8_t up) {
+  if (up) {
+    rightFoot->setPos(0);
+  } else {
+    rightFoot->setPos(500);
+  }
 }
 
 void Feet::startWalking() {
   walking = true;
   leftFootUp = true;
-  leftFoot->setPos(1000);
-  rightFoot->setPos(0);
+  setLeft(FOOT_UP);
+  setRight(FOOT_DOWN);
 }
 
 void Feet::stopWalking() {
   walking = false;
-  init();
+  setLeft(FOOT_DOWN);
+  setRight(FOOT_DOWN);
 }
 
 void Feet::update () {
@@ -28,11 +47,11 @@ void Feet::update () {
     if (! (leftFoot->requiresUpdate() || rightFoot->requiresUpdate()) ) {
       leftFootUp = !leftFootUp;
       if (leftFootUp) {
-        leftFoot->setPos(1000);
-        rightFoot->setPos(0);
+        setLeft(FOOT_UP);
+        setRight(FOOT_DOWN);
       } else {
-        leftFoot->setPos(0);
-        rightFoot->setPos(1000);
+        setLeft(FOOT_DOWN);
+        setRight(FOOT_UP);
       }
     }
   }
