@@ -49,8 +49,8 @@ void LineDriver::drive () {
     leftSpeed = speed;
     rightSpeed = speed - correction;
   }
-  leftSpeed = constrain(leftSpeed, MOTOR_SPEED_MIN, MOTOR_SPEED_MAX);
-  rightSpeed = constrain(rightSpeed, MOTOR_SPEED_MIN, MOTOR_SPEED_MAX);
+  leftSpeed = constrain(leftSpeed, -speed, speed);
+  rightSpeed = constrain(rightSpeed, -speed, speed);
   leftMotor->setSpeed(leftSpeed);
   rightMotor->setSpeed(rightSpeed);
 }

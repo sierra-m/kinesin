@@ -10,6 +10,8 @@
 #define CHANNEL_MIN_INIT ADC_MAX_VALUE
 #define CHANNEL_MAX_INIT ADC_MIN_VALUE
 
+#define TRACK_BLACK 0
+
 struct IrChannelLimits {
   int minValue;
   int maxValue;
@@ -19,7 +21,7 @@ template <int Size>
 class LineSensorArray {
   public:
     uint8_t trackBlack;
-    LineSensorArray(uint8_t trackBlack = 1);
+    LineSensorArray(uint8_t trackBlack = TRACK_BLACK);
     int calcPosition(int *samples);
 
     IrChannelLimits channelLimits[Size];

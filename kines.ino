@@ -228,7 +228,7 @@ void reset () {
   driveState = DriveStateIdle;
   leftMotor.setSpeed(0);
   rightMotor.setSpeed(0);
-  feet.stopWalking();
+  feet.init();
   tippingServo.setPos(0);
   setHappy();
 }
@@ -491,11 +491,13 @@ void checkObjectDetected () {
       driveState = DriveStateWaiting;
       lineDriver.stop();
       feet.stopWalking();
+      Serial.println("pause for object");
     }
   } else {
     if (driveState == DriveStateWaiting) {
       driveState = DriveStateDriving;
       feet.startWalking();
+      Serial.println("resume from object");
     }
   }
 }

@@ -9,8 +9,7 @@ Feet::Feet (MG90SServo *leftFoot, MG90SServo *rightFoot) {
 void Feet::init () {
   leftFoot->setSpeed(FEET_WALK_SPEED);
   rightFoot->setSpeed(FEET_WALK_SPEED);
-  leftFoot->setPos(0);
-  rightFoot->setPos(0);
+  stopWalking();
 }
 
 void Feet::setLeft(uint8_t up) {

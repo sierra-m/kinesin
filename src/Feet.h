@@ -3,7 +3,7 @@
 
 #include "MG90SServo.h"
 
-#define FEET_WALK_SPEED 50
+#define FEET_WALK_SPEED 90
 
 #define FOOT_UP 1
 #define FOOT_DOWN 0
